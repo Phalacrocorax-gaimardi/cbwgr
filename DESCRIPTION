@@ -1,7 +1,7 @@
 Package: cbwgr
 Type: Package
 Title: Warming impact of CBWG emissions scenarios
-Version: 0.1.0
+Version: 0.1.5
 Author: Joseph Wheatley
 Maintainer: The package maintainer <joe.wheatley@ucd.ie>
 Description: cbwgr used the FaIR Simple Model, historical global and irish emissions datasets and global and Irish emissions scenarios.

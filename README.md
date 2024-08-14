@@ -9,25 +9,24 @@ cbwgr calculates past and future global warming contributions for Ireland using 
 
 ## Prerequisites
 
-Python must be installed on your system along with the numpy, xarray and fair python packages.
-
-``` r
-# FILL THIS IN! HOW CAN PEOPLE INSTALL YOUR DEV PACKAGE?
+Python must be installed on your system. To install FaIR
+``` 
+pip install fair
 ```
 
 
 ## Installation
 
-You can install the development version of cbwgr like so:
+To install cbwgr from github you need a personal access token:
 
 ``` r
-library(devtools)
-install_github("Phalacrocorax-gaimardi/cbwgr")
+library(remotes)
+install_github("Phalacrocorax-gaimardi/cbwgr",auth_token = "personal-access-token")
 ```
 
 ## Example 1
 
-Run global scenarios (SSPs)
+Select global and 
 ``` r
 library(cbwgr)
 global_scenarios <- c('ssp119','ssp126')

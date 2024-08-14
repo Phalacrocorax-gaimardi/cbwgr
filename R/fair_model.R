@@ -144,7 +144,7 @@ cbwg_scen_to_fair <- function(cbwg_emissions, tim_scen,goblin_scen){
 
   cbwg <- cbwg %>% dplyr::rename("unit"=units)
   cbwg <- cbwg %>% dplyr::rename("specie"=gas)
-  cbwg <- cbwg %>% dplyr::mutate(ie_scenario = paste(tim_scen,goblin_scen,sep="__")) %>% dplyr::select(-scenario)
+  cbwg <- cbwg %>% dplyr::mutate(tim = tim_scen,goblin = goblin_scen) %>% dplyr::select(-scenario)
   return(cbwg)
 }
 
@@ -163,19 +163,20 @@ cbwg_scen_to_fair <- function(cbwg_emissions, tim_scen,goblin_scen){
 cbwg_to_loo_global_emissions <- function(global_scenarios,tim_scenarios,goblin_scenarios){
 
   rcmip0 <- rcmip_fair %>% dplyr::rename("global"=value) %>% dplyr::filter(scenario %in% global_scenarios)
-  rcmip_exie <- tibble::tibble()
+  rcmip_loo <- tibble::tibble()
   for(tim_scen in tim_scenarios)
     for(goblin_scen in goblin_scenarios){
       scen_ie <- cbwg_scen_to_fair(emissions_cbwg_2,tim_scen,goblin_scen)
+      scen_ie$scenario <- NULL
       scen_ie$year <- scen_ie$year + 0.5
       #combine with rcmip
       comb <- rcmip0 %>% dplyr::inner_join(scen_ie,by=c("specie","year","unit"))
       comb <- comb %>% dplyr::rename("ireland"=value)
-      comb <- comb %>% dplyr::mutate(global_exie = global-ireland)
-      rcmip_exie <- dplyr::bind_rows(rcmip_exie,comb)
-      rcmip_exie <- rcmip_exie %>% dplyr::select(scenario, ie_scenario,year,specie, global,ireland,global_exie,unit)
+      comb <- comb %>% dplyr::mutate(global_loo = global-ireland)
+      rcmip_loo <- dplyr::bind_rows(rcmip_loo,comb)
+      rcmip_loo <- rcmip_loo %>% dplyr::select(scenario,tim,goblin,year,specie, global,ireland,global_loo,unit)
     }
-  return(rcmip_exie %>% dplyr::select(scenario,ie_scenario,specie,year,global,ireland,global_exie,unit))
+  return(rcmip_loo %>% dplyr::select(scenario,tim,goblin,specie,year,global,ireland,global_loo,unit))
 }
 
 
@@ -196,7 +197,7 @@ cbwg_to_loo_global_emissions <- function(global_scenarios,tim_scenarios,goblin_s
 #' @export
 #'
 #' @examples
-gen_fair <- function(scenarios=global_scenarios, endyear=2100L, ch4_meth = 'leach2021',ghg_meth='meinshausen2020'){
+gen_fair <- function(scenarios=global_scenarios, endyear=2100L, ch4_meth = 'thornhill2021',ghg_meth='meinshausen2020'){
 
   #instantiate
   print("instantiating FaIR model")
@@ -272,7 +273,7 @@ gen_fair <- function(scenarios=global_scenarios, endyear=2100L, ch4_meth = 'leac
 #' get_conc
 #'
 #' @param fmod FaIR model run
-#' @param scen global scenario
+#' @param scen a global ssp scenario
 #'
 #' @return a dataframe with scenario, config, specie, value and unit columns
 #' @export
@@ -294,19 +295,18 @@ get_conc <- function(fmod,scen){
   conc <- tibble::tibble()
   for(i in seq_along(config_names)){
 
-    conc0 <- dat_r[,which(scen==scenarios),i,1:64] %>% tibble::as_tibble() %>% dplyr::bind_cols(year=dat_numpy$timebounds$data)
+    conc0 <- dat_r[,which(scen==global_scenarios),i,1:64] %>% tibble::as_tibble() %>% dplyr::bind_cols(year=dat_numpy$timebounds$data)
     conc0$config <- config_names[i]
     conc <- conc %>% dplyr::bind_rows(conc0)
   }
 
   conc <- conc %>% tidyr::pivot_longer(c(-year,-config),names_to="specie", values_to="value") #%>% filter(esm != "EC-Earth3-Veg")
   conc$scenario <- scen
-  conc <- conc %>% dplyr::inner_join(concentration_units)
-  conc <- conc %>% dplyr::select(scenario,config,specie,value,unit)
+  conc <- conc %>% dplyr::right_join(concentration_units)
+  conc <- conc %>% dplyr::select(scenario,config,specie,year,value,unit)
   conc %>% tidyr::drop_na() %>% return()
 
 }
-
 
 #' get_forcing
 #'
@@ -356,14 +356,14 @@ get_forcing <- function(fmod,scen){
 #'
 #' @examples
 get_warming <- function(fmod,scen,use_1851_1900_baseline=TRUE){
-
+  #
   dat_numpy <- fmod$temperature$as_numpy()
   #dat_r <- reticulate::np_array(dat_numpy$data) %>% reticulate::py_to_r()
   dat_r <- fmod$temperature$data
   dimnames(dat_r) <- list(dat_numpy$timebounds$data,dat_numpy$scenario$data,dat_numpy$config$data,dat_numpy$layer$data)
   #dim(dat_r)
-
-  ssp <- dat_r[,which(scen==global_scenarios),1:41,1] %>% tibble::as_tibble() %>% dplyr::bind_cols(year=dat_numpy$timebounds$data)
+  n_config <- fmod$configs %>% length()
+  ssp <- dat_r[,which(scen==global_scenarios),1:n_config,1] %>% tibble::as_tibble() %>% dplyr::bind_cols(year=dat_numpy$timebounds$data)
   ssp <- ssp %>% tidyr::pivot_longer(-year,names_to="config", values_to="gsat") #%>% filter(esm != "EC-Earth3-Veg")
   ssp$scenario <- scen
 
@@ -452,40 +452,40 @@ get_emissions <- function(fmod,scen){
 #rcmip_exie <- cbwg_to_loo_global_emissions(global_scenarios,tim_scenarios,goblin_scenarios)
 
 
-#' modify_emissions
+#' gen_fair_loo
 #'
 #' initialise a FaIR instance with global emissions minus a cbwg ireland emission scenario
 #'
-#' @param fmod a FaiR model instance produced by gen_fair()
-#' @param rcmip_exie global emissions dataset for global and cbwg scenariosn
+#' @param rcmip_loo global emissions dataset for global and cbwg scenarios produced by cbwg_to_loo_global_emissions
 #' @param tim_scen a co2 ffi scenario name
 #' @param goblin_scen afolu scenario name
+#' @param endyear end year of run
+#' @param ch4_meth ch4_method
+#' @param ghg_meth ghg_method
 #'
-#' @return FaIR model initialised with global-ireland emissions
+#' @return FaIR model initialised with global - ireland emissions
 #' @export
 #'
 #' @examples
-modify_emissions <- function(fmod,rcmip_exie,tim_scen="250mt-led", goblin_scen="Sc2d"){
+gen_fair_loo <- function(rcmip_loo,tim_scen="250mt-led", goblin_scen="Sc3e",endyear=2100L, ch4_meth = 'thornhill2021',ghg_meth='meinshausen2020'){
   #
   #instantiate
-  print("filling global emissions")
+  fmod <- gen_fair(endyear=endyear,ch4_meth=ch4_meth,ghg_meth=ghg_meth)
+  print("filling emissions")
   if(!(tim_scen %in% tim_scenarios)) stop("bad tim scenario")
   if(!(goblin_scen %in% goblin_scenarios)) stop("bad goblin scenario")
-    #choose scenario_ie
-  ie_scen <- paste(tim_scen,goblin_scen,sep="__")
-  rcmip_exie0 <- rcmip_exie %>% dplyr::filter(ie_scenario == ie_scen)
-  #scenarios <- rcmip_exie0$scenario %>% unique()
-  species0 <- rcmip_exie0$specie %>% unique()
-  timepoints0 <- rcmip_exie0$year %>% unique()
-  configs <- fair_configs_cmip6 %>% dplyr::mutate(model_run = paste(model,run,sep="_"))
-  config_names <- configs$model_run #%>% unique() #configs names = ESM model_runs or ensemble labels
+      rcmip_loo_0 <- rcmip_loo %>% dplyr::filter(tim == tim_scen,goblin==goblin_scen)
+      species0 <- rcmip_loo_0$specie %>% unique()
+      timepoints0 <- rcmip_loo_0$year %>% unique()
+      configs <- fair_configs_cmip6 %>% dplyr::mutate(model_run = paste(model,run,sep="_"))
+      config_names <- configs$model_run #%>% unique() #configs names = ESM model_runs or ensemble labels
 
   for(scen in global_scenarios)
     for(spec in species0)
       for(conf in config_names){
         #print(paste(scen,spec,conf,sep=" "))
         #dat <- rcmip_exie0 %>% dplyr::filter(scenario==scen,ie_scenario_ie,specie==spec) %>% dplyr::pull(global_exie)
-        dat <- rcmip_exie0 %>% dplyr::filter(scenario==scen,specie==spec) %>% dplyr::pull(global_exie)
+        dat <- rcmip_loo_0 %>% dplyr::filter(scenario==scen,specie==spec) %>% dplyr::pull(global_loo)
         interface$fill(fmod$emissions, data=dat,specie=spec, scenario=scen,config=conf, timepoints = timepoints0)
       }
 
@@ -493,12 +493,56 @@ modify_emissions <- function(fmod,rcmip_exie,tim_scen="250mt-led", goblin_scen="
   fmod %>% return()
 }
 
+
+
+
+#' find_neutral_probabilities
+#'
+#' The probability of temperature neutrality occurring before a given year neutral year, currently fixed at 2050. A specified probability
+#' threshold is use to classify neutrality in 5-yearly increment e.g. 67% probability of neutrality before 2046 etc.
+#'
+#' @param gsat1 a data frame of warming temperature for global, national ffi and afolu emissions
+#' @param p_threshold the probability threshold of interest used to classify neutrality combinations
+#'
+#' @return a dataframe giving probabilities of neutrality before neutral_year, neutral_year-5 and neutral_year -10.
+#' @export
+#'
+#' @examples
+find_neutral_probabilities <-function(gsat1, p_threshold=0.67){
+  #
+  nconfig <- dplyr::n_distinct(gsat1$config)
+  neutrality <- gsat1 %>% dplyr::filter(year > 2020 & year <= 2061) %>% dplyr::group_by(config,scenario,tim,goblin) %>% dplyr::slice_max(order_by=gsat_ie,n=1,with_ties = FALSE) %>% dplyr::filter(scenario %in%  global_scenarios) %>% dplyr::arrange(year)
+  neutrality <- neutrality %>% dplyr::rename("ireland"=gsat_ie)
+  neutrality <- neutrality %>% dplyr::rename("max_year"=year) %>% dplyr::select(config,scenario,tim,goblin,max_year,ireland)
+
+  neutral_probs <- neutrality  %>% dplyr::group_by(scenario,tim,goblin) %>% summarise(p_50=sum(max_year <= 2050)/nconfig,
+                                                                                      p_45=sum(max_year <= 2045)/nconfig,
+                                                                                      p_40=sum(max_year <= 2040)/nconfig)
+
+  neutral_probs <- neutral_probs %>% dplyr::mutate(case = dplyr::case_when((p_40 > p_threshold)~paste(2036,2040,sep="-"),
+                                                                           ((p_40 <= p_threshold) & (p_45 > p_threshold))~paste(2041,2045,sep="-"),
+                                                                           ((p_50 >= p_threshold) & (p_45 < p_threshold))~paste(2046,2050,sep="-"),
+                                                                           (p_50 < p_threshold)~"After 2050"))
+
+  neutral_probs <- neutral_probs %>% dplyr::mutate(case = tidyr::replace_na(case,"After 2050"))
+  neutral_probs <- neutral_probs %>% dplyr::filter(tim != "250mt-bau")
+  neutral_probs$tim<- factor(neutral_probs$tim,levels=c("250mt-led","300mt-led","350mt-led","300mt-bau","350mt-bau","400mt-bau","450mt-bau"))
+  neutral_probs$goblin<- factor(neutral_probs$goblin,levels=c("Sc1a","Sc2a","Sc3a","Sc1b","Sc2b","Sc3b","Sc1c","Sc2c","Sc3c","Sc1d","Sc2d","Sc3d","Sc1e","Sc2e","Sc3e"))
+  neutral_probs$scenario <- factor(neutral_probs$scenario,levels=c("ssp119","ssp126","ssp434","ssp245"))
+  neutral_probs %>% return()
+}
+
 #
+#global_scenarios <- c("ssp119","ssp126")
 #f <- gen_fair()
-#g <- modify_emissions(f,"300mt-led","Sc3e")
+#f$run()
+#tim_scenarios <- c("250mt-led","300mt-led","350mt-bau")
+#goblin_scenarios <- c("Sc1a","Sc2c","Sc3e")
+#rcmip_loo <- cbwg_to_loo_global_emissions(global_scenarios,tim_scenarios,goblin_scenarios)
+#g <- gen_fair_loo(rcmip_loo,"300mt-led","Sc3e")
 #g$run()
 #gsat <- get_warming(g,'ssp126')
-#fmod$run()
+#f$run()
 #gsat_global
 #w1 <- get_warming(g,'ssp126')
 #%>% ggplot(aes(year,value,col)) + geom_line()

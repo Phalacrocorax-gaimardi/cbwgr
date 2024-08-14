@@ -7,7 +7,7 @@
 gen_fair(
   scenarios = global_scenarios,
   endyear = 2100L,
-  ch4_meth = "leach2021",
+  ch4_meth = "thornhill2021",
   ghg_meth = "meinshausen2020"
 )
 }
