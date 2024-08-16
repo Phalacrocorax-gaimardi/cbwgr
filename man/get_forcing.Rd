@@ -9,7 +9,7 @@ get_forcing(fmod, scen)
 \arguments{
 \item{fmod}{FaIR model run}
 
-\item{scen}{global scenario}
+\item{scen}{a global ssp scenario}
 }
 \value{
 a dataframe with scenario, config, specie, value and unit columns

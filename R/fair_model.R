@@ -292,10 +292,12 @@ get_conc <- function(fmod,scen){
   configs <- fair_configs_cmip6 %>% dplyr::mutate(model_run = paste(model,run,sep="_"))
   config_names <- configs$model_run #%>% unique() #configs names = ESM model_runs or ensemble labels
 
+  scenarios <- fmod$scenarios
+
   conc <- tibble::tibble()
   for(i in seq_along(config_names)){
 
-    conc0 <- dat_r[,which(scen==global_scenarios),i,1:64] %>% tibble::as_tibble() %>% dplyr::bind_cols(year=dat_numpy$timebounds$data)
+    conc0 <- dat_r[,which(scen==scenarios),i,1:64] %>% tibble::as_tibble() %>% dplyr::bind_cols(year=dat_numpy$timebounds$data)
     conc0$config <- config_names[i]
     conc <- conc %>% dplyr::bind_rows(conc0)
   }
@@ -313,7 +315,7 @@ get_conc <- function(fmod,scen){
 #' get forcing by config and species from model run
 #'
 #' @param fmod FaIR model run
-#' @param scen global scenario
+#' @param scen a global ssp scenario
 #'
 #' @return a dataframe with scenario, config, specie, value and unit columns
 #' @export
@@ -328,6 +330,8 @@ get_forcing <- function(fmod,scen){
 
   configs <- fair_configs_cmip6 %>% dplyr::mutate(model_run = paste(model,run,sep="_"))
   config_names <- configs$model_run #%>% unique() #configs names = ESM model_runs or ensemble labels
+
+  scenarios <- fmod$scenarios
 
   force <-tibble::tibble()
   for(conf in config_names){
@@ -389,8 +393,12 @@ get_warming <- function(fmod,scen,use_1851_1900_baseline=TRUE){
 get_ohc <- function(fmod,scen){
 
   dat_numpy <- fmod$ocean_heat_content_change$as_numpy()
-  dat_r <- reticulate::np_array(dat_numpy$data) %>% reticulate::py_to_r()
+  #dat_r <- reticulate::np_array(dat_numpy$data) %>% reticulate::py_to_r()
+  dat_r <- fmod$ocean_heat_content_change$data
   dimnames(dat_r) <- list(dat_numpy$timebounds$data,dat_numpy$scenario$data,dat_numpy$config$data)
+
+  config_names <- fmod$configs
+  scenarios <- fmod$scenarios
 
   ohc <-tibble::tibble()
   for(conf in config_names){
@@ -428,8 +436,10 @@ get_emissions <- function(fmod,scen){
   dat_r <- fmod$emissions$data
   dimnames(dat_r) <- list(dat_numpy$timepoints$data,dat_numpy$scenario$data,dat_numpy$config$data,dat_numpy$specie$data)
 
-  configs <- fair_configs_cmip6 %>% dplyr::mutate(model_run = paste(model,run,sep="_"))
-  config_names <- configs$model_run #%>% unique() #configs names = ESM model_runs or ensemble labels
+  #configs <- fair_configs_cmip6 %>% dplyr::mutate(model_run = paste(model,run,sep="_"))
+  #config_names <- configs$model_run #%>% unique() #configs names = ESM model_runs or ensemble labels
+
+  config_names <- fmod$configs
 
   emis <- tibble::tibble()
   for(i in seq_along(config_names)){
@@ -493,9 +503,6 @@ gen_fair_loo <- function(rcmip_loo,tim_scen="250mt-led", goblin_scen="Sc3e",endy
   fmod %>% return()
 }
 
-
-
-
 #' find_neutral_probabilities
 #'
 #' The probability of temperature neutrality occurring before a given year neutral year, currently fixed at 2050. A specified probability
@@ -541,6 +548,10 @@ find_neutral_probabilities <-function(gsat1, p_threshold=0.67){
 #rcmip_loo <- cbwg_to_loo_global_emissions(global_scenarios,tim_scenarios,goblin_scenarios)
 #g <- gen_fair_loo(rcmip_loo,"300mt-led","Sc3e")
 #g$run()
+
+#get_ohc(g,"ssp126")
+#forc
+
 #gsat <- get_warming(g,'ssp126')
 #f$run()
 #gsat_global

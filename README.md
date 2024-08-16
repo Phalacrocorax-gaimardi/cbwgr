@@ -13,11 +13,11 @@ Python must be installed on your system. To install FaIR
 ``` 
 pip install fair
 ```
-If there are multiple versions of you need to ensure that fair is installed to the version of Python used by the R package reticulate. 
+If there are multiple versions you need to ensure that fair is installed to the version of Python used by the R package reticulate. 
 
 ## Installation
 
-To install cbwgr from github you might need a personal access token:
+At the moment, to install cbwgr from github you need a personal access token:
 
 ``` r
 library(remotes)
