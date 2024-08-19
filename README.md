@@ -45,12 +45,12 @@ f$run
 ```
 By default cbwgr runs FaIR with 66 parameter configurations (ensemble members or "configs" based on CMIP6 ESM calibrations). The model parameters for these configs are in cbwgr::fair_configs_cmip6.
 
-To find GSAT in 'ssp126' and for all configs (relative to 1851-1900)
+For example, to find warming in 'ssp126' for all configs (relative to 1851-1900)
 ```r
-gsat <- get_warming(f,'ssp126)
+gsat <- get_warming(f,'ssp126')
 ```
-gsat contains global warming in each scenario/config combination. The median warming is
-To find GSAT in 'ssp126' and for all configs (relative to 1851-1900)
+gsat contains global warming for each scenario/config combination. The median warming is
+in 'ssp126' over all configs is (relative to 1851-1900)
 ```r
 gsat_m <- gsat %>% group_by(year) %>% summarise(value=median(value))
 ```
@@ -61,7 +61,7 @@ Create a dataframe of "leave-one-out" global emissions:
 ```r
 rcmip_loo <- cbwg_to_loo_global_emissions(global_scenarios,tim_scenarios,goblin_scenarios)
 ```
-Create a new model instance based on LOO emissions for global_scenarios and national scenarios, the find global warming gsat_loo in a specific global scenario.
+Create a new model instance based on leave-one-outb (LOO) emissions for global_scenarios and national scenarios, and the find global warming gsat_loo in ssp126.
 ```r
 g <- gen_fair_loo(rcmip_loo,"300mt-led","Sc3e")
 g$run()
@@ -74,7 +74,7 @@ gsat_loo <- gsat %>% rename("global_loo"=value)
 
 gsat_ie <- gsat %>% inner_join(gsat_loo) %>% mutate(ireland=global-global_loo)
 ```
-The median Irish contribution is then:
+This contains the Irish marginal contribution to warming in all 66 configs. The median Irish contribution is then:
 ```r
 gsat_ie_m <- gsat_ie %>% group_by(year) %>% summarise(ireland=median(ireland))
 ```
