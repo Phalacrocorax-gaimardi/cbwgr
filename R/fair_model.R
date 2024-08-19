@@ -518,8 +518,8 @@ gen_fair_loo <- function(rcmip_loo,tim_scen="250mt-led", goblin_scen="Sc3e",endy
 find_neutral_probabilities <-function(gsat1, p_threshold=0.67){
   #
   nconfig <- dplyr::n_distinct(gsat1$config)
-  neutrality <- gsat1 %>% dplyr::filter(year > 2020 & year <= 2061) %>% dplyr::group_by(config,scenario,tim,goblin) %>% dplyr::slice_max(order_by=gsat_ie,n=1,with_ties = FALSE) %>% dplyr::filter(scenario %in%  global_scenarios) %>% dplyr::arrange(year)
-  neutrality <- neutrality %>% dplyr::rename("ireland"=gsat_ie)
+  neutrality <- gsat1 %>% dplyr::filter(year > 2020 & year <= 2061) %>% dplyr::group_by(config,scenario,tim,goblin) %>% dplyr::slice_max(order_by=ireland,n=1,with_ties = FALSE) %>% dplyr::arrange(year)
+  #neutrality <- neutrality %>% dplyr::rename("ireland"=gsat_ie)
   neutrality <- neutrality %>% dplyr::rename("max_year"=year) %>% dplyr::select(config,scenario,tim,goblin,max_year,ireland)
 
   neutral_probs <- neutrality  %>% dplyr::group_by(scenario,tim,goblin) %>% summarise(p_50=sum(max_year <= 2050)/nconfig,
