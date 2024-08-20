@@ -74,7 +74,7 @@ gsat_loo <- gsat %>% rename("global_loo"=value)
 
 gsat_ie <- gsat %>% inner_join(gsat_loo) %>% mutate(ireland=global-global_loo)
 ```
-This contains the Irish marginal contribution to warming in all 66 configs. The median Irish contribution is then:
+This contains the Irish marginal contribution to warming in all 66 configs. The median Irish contribution is:
 ```r
 gsat_ie_m <- gsat_ie %>% group_by(year) %>% summarise(ireland=median(ireland))
 ```
