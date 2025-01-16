@@ -4,14 +4,21 @@
 \alias{cbwg_to_loo_global_emissions}
 \title{cbwg_to_loo_global_emissions}
 \usage{
-cbwg_to_loo_global_emissions(global_scenarios, tim_scenarios, goblin_scenarios)
+cbwg_to_loo_global_emissions(
+  global_scenarios0 = global_scenarios,
+  tim_scenarios0 = tim_scenarios,
+  lulucf_scenarios0 = lulucf_scenarios,
+  ag_scenarios0 = ag_scenarios
+)
 }
 \arguments{
-\item{global_scenarios}{a vector SSP scenarios}
+\item{global_scenarios0}{vector of SSPs}
 
-\item{tim_scenarios}{vector of Energy system scenarios}
+\item{tim_scenarios0}{vector of Energy system scenarios}
 
-\item{goblin_scenarios}{vector AFOLU scenarios}
+\item{lulucf_scenarios0}{vector LULUCF scenarios}
+
+\item{ag_scenarios0}{vector AG scenarios}
 }
 \value{
 emissions

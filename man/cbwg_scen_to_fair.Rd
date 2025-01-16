@@ -4,14 +4,21 @@
 \alias{cbwg_scen_to_fair}
 \title{cbwg_scen_to_fair}
 \usage{
-cbwg_scen_to_fair(cbwg_emissions, tim_scen, goblin_scen)
+cbwg_scen_to_fair(
+  cbwg_emissions,
+  tim_scen = "400mt",
+  lulucf_scen = "L4",
+  ag_scen = "e"
+)
 }
 \arguments{
 \item{cbwg_emissions}{input emissions in kt gas}
 
 \item{tim_scen}{ffi co2 scenario}
 
-\item{goblin_scen}{aflolu scenario}
+\item{lulucf_scen}{lulucf scenario}
+
+\item{ag_scen}{ag scenario}
 }
 \description{
 re-formats CBWG emissions input file scenario to FaIR format and units

@@ -21,7 +21,9 @@ import_python_modules <- function(){
 }
 
 
-#FaiR functions
+#FaIR functions
+
+
 
 #' cbwg_scen_to_fair
 #'
@@ -29,154 +31,187 @@ import_python_modules <- function(){
 #'
 #' @param cbwg_emissions input emissions in kt gas
 #' @param tim_scen ffi co2 scenario
-#' @param goblin_scen aflolu scenario
+#' @param lulucf_scen lulucf scenario
+#' @param ag_scen ag scenario
 #'
 #' @return
 #' @export
 #'
 #' @examples
-cbwg_scen_to_fair <- function(cbwg_emissions, tim_scen,goblin_scen){
+cbwg_scen_to_fair <- function(cbwg_emissions, tim_scen="400mt", lulucf_scen="L4", ag_scen="e") {
+  #
+  if(!(tim_scen %in% tim_scenarios)) stop("bad ffi scenario")
+  if(!(lulucf_scen %in% lulucf_scenarios)) stop("bad lulucf scenario")
+  if(!(ag_scen %in% ag_scenarios)) stop("bad ag scenario")
 
   ie_gases <- cbwg_emissions$gas %>% unique()
-  ie_scenario_gases <- c("FFI-CO2","LULUCF-CO2","AG-CH4","N2O")
+  ie_scenario_gases <- c("FFI-CO2", "LULUCF-CO2", "AG-CH4", "N2O") #perhaps include LULUCF-CH4
   ie_non_scenario_gases <- ie_gases[!(ie_gases %in% ie_scenario_gases)]
-  #cbwg <- cbwg_emissions %>% filter(ga <= end_2021)
-  cbwg <- cbwg_emissions %>% dplyr::mutate(scenario=ifelse(gas %in% ie_non_scenario_gases | year < 2022,"CBWG",scenario))
-  cbwg <- cbwg %>% dplyr::mutate(scenario = stringr::str_replace(scenario,"_EXTRAP",""))
+  cbwg <- cbwg_emissions %>% dplyr::mutate(scenario = ifelse(gas %in%
+                                                               ie_non_scenario_gases | year < 2022, "CBWG", scenario))
+  cbwg <- cbwg %>% dplyr::mutate(scenario = stringr::str_replace(scenario,
+                                                                 "_EXTRAP", ""))
+  #fapri_scen <- ag_scen
+  if(ag_scen %in% c("a","b","d","e") ){
+    goblin_scen <- paste(stringr::str_replace(lulucf_scen,"L","Sc"),ag_scen,sep="")
+    cbwg <- cbwg %>% dplyr::filter(scenario %in% c("CBWG", tim_scen, goblin_scen))}
+  if(ag_scen %in% fapri_scenarios){
+    cbwg0 <- cbwg %>% dplyr::filter(scenario %in% c("CBWG", tim_scen, ag_scen))
+    cbwg1 <- cbwg %>% dplyr::filter(gas=="LULUCF-CO2",scenario == paste(stringr::str_replace(lulucf_scen,"L","Sc"),"d",sep=""))
+    cbwg1$scenario <- lulucf_scen
+    cbwg <- cbwg0 %>% dplyr::bind_rows(cbwg1)}
 
-  cbwg <- cbwg %>% dplyr::filter(scenario %in% c("CBWG",tim_scen,goblin_scen))
 
-  #preliminaries: collapse CH4 AG, WASTE and LULUCF emissions to AFOLU emissions
-  ch4 <- cbwg %>% dplyr::filter(stringr::str_detect(gas,"CH4")) %>% dplyr::group_by(year) %>% dplyr::summarise(gas="CH4",value=sum(value),units=units[1])
-  #ch4 <- ch4 %>% group_by(year) %>% summarise(gas="AFOLU-CH4",units=units[1],scenario=scenario[1], value=sum(value)) %>% ungroup()
-  cbwg <- cbwg %>% dplyr::filter(!stringr::str_detect(gas,"CH4")) %>% dplyr::bind_rows(ch4)
-
-  cbwg <- cbwg %>% dplyr::mutate(value=dplyr::case_when(gas=="CH4"~value/1000,gas!="CH4"~value))
-  cbwg <- cbwg %>% dplyr::mutate(units=replace(units,gas=="CH4","Mt CH4/yr"))
-
-  cbwg <- cbwg %>% dplyr::mutate(value=dplyr::case_when(gas=="FFI-CO2"~value/1e+6,gas!="FFI-CO2"~value))
-  cbwg <- cbwg %>% dplyr::mutate(gas=dplyr::case_when(gas=="FFI-CO2"~"CO2 FFI",gas!="FFI-CO2"~gas))
-  cbwg <- cbwg %>% dplyr::mutate(units=replace(units,gas=="CO2 FFI","Gt CO2/yr"))
-
-  cbwg <- cbwg %>% dplyr::mutate(value=dplyr::case_when(gas=="LULUCF-CO2"~value/1e+6,gas!="LULUCF-CO2"~value))
-  cbwg <- cbwg %>% dplyr::mutate(gas=dplyr::case_when(gas=="LULUCF-CO2"~"CO2 AFOLU",gas!="LULUCF-CO2"~gas))
-  cbwg <- cbwg %>% dplyr::mutate(units=replace(units,gas=="CO2 AFOLU","Gt CO2/yr"))
-
-  cbwg <- cbwg %>% dplyr::mutate(value=dplyr::case_when(gas=="N2O"~value/1e+3,gas!="N2O"~value))
-  #cbwg <- cbwg %>% mutate(variable=case_when(gas=="N2O"~"N2OB",gas!="N2O"~variable))
-  cbwg <- cbwg %>% dplyr::mutate(units=replace(units,gas=="N2O","Mt N2O/yr"))
-
-  cbwg <- cbwg %>% dplyr::mutate(value=dplyr::case_when(gas=="SO2"~value/1000,gas!="SO2"~value))
-  cbwg <- cbwg %>% dplyr::mutate(gas=dplyr::case_when(gas=="SO2"~"Sulfur",gas!="SO2"~gas))
-  cbwg <- cbwg %>% dplyr::mutate(units=replace(units, gas =="Sulfur","Mt SO2/yr"))
-
-  cbwg <- cbwg %>% dplyr::mutate(value=dplyr::case_when(gas=="NH3"~value/1000,gas!="NH3"~value))
-  #cbwg <- cbwg %>% mutate(variable=case_when(gas=="NH3"~"NH3B",gas!="NH3"~variable))
-  cbwg <- cbwg %>% dplyr::mutate(units=replace(units,gas=="NH3","Mt NH3/yr"))
-
-  cbwg <- cbwg %>% dplyr::mutate(value=dplyr::case_when(gas=="CO"~value/1000,gas!="CO"~value))
-  #cbwg <- cbwg %>% mutate(variable=case_when(gas=="CO"~"COI",gas!="CO"~variable))
-  cbwg <- cbwg %>% dplyr::mutate(units=replace(units,gas=="CO","Mt CO/yr"))
-
-  cbwg <- cbwg %>% dplyr::mutate(value=dplyr::case_when(gas=="NOx"~value/1000,gas!="NOx"~value))
-  #cbwg <- cbwg %>% mutate(variable=case_when(gas=="NOx"~"NOXI",gas!="NOx"~variable))
-  cbwg <- cbwg %>% dplyr::mutate(units=replace(units,gas=="NOx","Mt NO2/yr"))
-
-  cbwg <- cbwg %>% dplyr::mutate(value=dplyr::case_when(gas=="NMVOC"~value/1000,gas!="NMVOC"~value))
-  cbwg <- cbwg %>% dplyr::mutate(gas=dplyr::case_when(gas=="NMVOC"~"VOC",gas!="NMVOC"~gas))
-  cbwg <- cbwg %>% dplyr::mutate(units=replace(units,gas=="VOC","Mt VOC/yr"))
-
-  cbwg <- cbwg %>% dplyr::mutate(value=dplyr::case_when(gas=="BC"~value/1000,gas!="BC"~value))
-  #cbwg <- cbwg %>% mutate(variable=case_when(gas=="BC"~"BCI",gas!="BC"~variable))
-  cbwg <- cbwg %>% dplyr::mutate(units=replace(units,gas=="BC","Mt BC/yr"))
-
-  cbwg <- cbwg %>% dplyr::mutate(value=dplyr::case_when(gas=="OC"~value/1000,gas!="OC"~value))
-  #cbwg <- cbwg %>% mutate(variable=case_when(gas=="OC"~"OCI",gas!="OC"~variable))
-  cbwg <- cbwg %>% dplyr::mutate(units=replace(units,gas=="OC","Mt OC/yr"))
-
-  cbwg <- cbwg %>% dplyr::mutate(value=dplyr::case_when(gas=="HFC-125"~value/1000,gas!="HFC-125"~value))
-  #cbwg <- cbwg %>% mutate(variable=case_when(gas=="HFC-125"~"HFC125",gas!="HFC-125"~variable))
-  cbwg <- cbwg %>% dplyr::mutate(units=replace(units,gas=="HFC-125","kt HFC125/yr"))
-
-  cbwg <- cbwg %>% dplyr::mutate(value=dplyr::case_when(gas=="HFC-134a"~value/1000,gas!="HFC-134a"~value))
-  #cbwg <- cbwg %>% mutate(variable=case_when(gas=="HFC-134a"~"HFC134A",gas!="HFC-134a"~variable))
-  cbwg <- cbwg %>% dplyr::mutate(units=replace(units,gas=="HFC-134a","kt HFC134a/yr"))
-
-  cbwg <- cbwg %>% dplyr::mutate(value=dplyr::case_when(gas=="HFC-143a"~value/1000,gas!="HFC-143a"~value))
-  #cbwg <- cbwg %>% mutate(variable=case_when(gas=="HFC-143a"~"HFC143A",gas!="HFC-143a"~variable))
-  cbwg <- cbwg %>% dplyr::mutate(units=replace(units,gas=="HFC-143a","kt HFC143a/yr"))
-
-  cbwg <- cbwg %>% dplyr::mutate(value=dplyr::case_when(gas=="HFC-227ea"~value/1000,gas!="HFC-227ea"~value))
-  #cbwg <- cbwg %>% mutate(variable=case_when(gas=="HFC-227ea"~"HFC227EA",gas!="HFC-227ea"~variable))
-  cbwg <- cbwg %>% dplyr::mutate(units=replace(units,gas=="HFC-227ea","kt HFC227ea/yr"))
-
-  cbwg <- cbwg %>% dplyr::mutate(value=dplyr::case_when(gas=="HFC-23"~value/1000,gas!="HFC-23"~value))
-  #cbwg <- cbwg %>% mutate(variable=case_when(gas=="HFC-23"~"HFC23",gas!="HFC-23"~variable))
-  cbwg <- cbwg %>% dplyr::mutate(units=replace(units,gas=="HFC-23","kt HFC23/yr"))
-
-  cbwg <- cbwg %>% dplyr::mutate(value=dplyr::case_when(gas=="HFC-152a"~value/1000,gas!="HFC-152a"~value))
-  #cbwg <- cbwg %>% mutate(variable=case_when(gas=="HFC-152a"~"HFC152A",gas!="HFC-152a"~variable))
-  cbwg <- cbwg %>% dplyr::mutate(units=replace(units,gas=="HFC-152a","kt HFC152a/yr"))
-
-  cbwg <- cbwg %>% dplyr::mutate(value=dplyr::case_when(gas=="HFC-32"~value/1000,gas!="HFC-32"~value))
-  #cbwg <- cbwg %>% mutate(variable=case_when(gas=="HFC-32"~"HFC32",gas!="HFC-32"~variable))
-  cbwg <- cbwg %>% dplyr::mutate(units=replace(units,gas=="HFC-32","kt HFC32/yr"))
-
-  cbwg <- cbwg %>% dplyr::mutate(value=dplyr::case_when(gas=="C2F6"~value/1000,gas!="C2F6"~value))
-  #cbwg <- cbwg %>% mutate(variable=case_when(gas=="C2F6"~"C2F6",gas!="C2F6"~variable))
-  cbwg <- cbwg %>% dplyr::mutate(units=replace(units,gas=="C2F6","kt C2F6/yr"))
-
-  cbwg <- cbwg %>% dplyr::mutate(value=dplyr::case_when(gas=="CF4"~value/1000,gas!="CF4"~value))
-  #cbwg <- cbwg %>% mutate(variable=case_when(gas=="CF4"~"CF4",gas!="CF4"~variable))
-  cbwg <- cbwg %>% dplyr::mutate(units=replace(units,gas=="CF4","kt CF4/yr"))
-
-  cbwg <- cbwg %>% dplyr::mutate(value=dplyr::case_when(gas=="SF6"~value/1000,gas!="SF6"~value))
-  #cbwg <- cbwg %>% mutate(variable=case_when(gas=="SF6"~"SF6",gas!="SF6"~variable))
-  cbwg <- cbwg %>% dplyr::mutate(units=replace(units,gas=="SF6","kt SF6/yr"))
-
-  cbwg <- cbwg %>% dplyr::mutate(value=dplyr::case_when(gas=="NF3"~value/1000,gas!="NF3"~value))
-  #cbwg <- cbwg %>% mutate(variable=case_when(gas=="NF3"~"NF3",gas!="NF3"~variable))
-  cbwg <- cbwg %>% dplyr::mutate(units=replace(units,gas=="NF3","kt NF3/yr"))
-
-  cbwg <- cbwg %>% dplyr::mutate(value=dplyr::case_when(gas=="c-C4F8"~value/1000,gas!="c-C4F8"~value))
-  #cbwg <- cbwg %>% mutate(variable=case_when(gas=="c-C4F8"~"CC4F8",gas!="c-C4F8"~variable))
-  cbwg <- cbwg %>% dplyr::mutate(units=replace(units,gas=="c-C4F8","kt CC4F8/yr"))
-
-  cbwg <- cbwg %>% dplyr::rename("unit"=units)
-  cbwg <- cbwg %>% dplyr::rename("specie"=gas)
-  cbwg <- cbwg %>% dplyr::mutate(tim = tim_scen,goblin = goblin_scen) %>% dplyr::select(-scenario)
+  if(dim(cbwg)[1]==0) return()
+  #sum all CH4 sources
+  ch4 <- cbwg %>% dplyr::filter(stringr::str_detect(gas, "CH4")) %>%
+    dplyr::group_by(year) %>% dplyr::summarise(gas = "CH4",
+                                               value = sum(value), units = units[1])
+  cbwg <- cbwg %>% dplyr::filter(!stringr::str_detect(gas,
+                                                      "CH4")) %>% dplyr::bind_rows(ch4)
+  cbwg <- cbwg %>% dplyr::mutate(value = dplyr::case_when(gas ==
+                                                            "CH4" ~ value/1000, gas != "CH4" ~ value))
+  cbwg <- cbwg %>% dplyr::mutate(units = replace(units, gas ==
+                                                   "CH4", "Mt CH4/yr"))
+  cbwg <- cbwg %>% dplyr::mutate(value = dplyr::case_when(gas ==
+                                                            "FFI-CO2" ~ value/1e+06, gas != "FFI-CO2" ~ value))
+  cbwg <- cbwg %>% dplyr::mutate(gas = dplyr::case_when(gas ==
+                                                          "FFI-CO2" ~ "CO2 FFI", gas != "FFI-CO2" ~ gas))
+  cbwg <- cbwg %>% dplyr::mutate(units = replace(units, gas ==
+                                                   "CO2 FFI", "Gt CO2/yr"))
+  cbwg <- cbwg %>% dplyr::mutate(value = dplyr::case_when(gas ==
+                                                            "LULUCF-CO2" ~ value/1e+06, gas != "LULUCF-CO2" ~ value))
+  cbwg <- cbwg %>% dplyr::mutate(gas = dplyr::case_when(gas ==
+                                                          "LULUCF-CO2" ~ "CO2 AFOLU", gas != "LULUCF-CO2" ~ gas))
+  cbwg <- cbwg %>% dplyr::mutate(units = replace(units, gas ==
+                                                   "CO2 AFOLU", "Gt CO2/yr"))
+  cbwg <- cbwg %>% dplyr::mutate(value = dplyr::case_when(gas ==
+                                                            "N2O" ~ value/1000, gas != "N2O" ~ value))
+  cbwg <- cbwg %>% dplyr::mutate(units = replace(units, gas ==
+                                                   "N2O", "Mt N2O/yr"))
+  cbwg <- cbwg %>% dplyr::mutate(value = dplyr::case_when(gas ==
+                                                            "SO2" ~ value/1000, gas != "SO2" ~ value))
+  cbwg <- cbwg %>% dplyr::mutate(gas = dplyr::case_when(gas ==
+                                                          "SO2" ~ "Sulfur", gas != "SO2" ~ gas))
+  cbwg <- cbwg %>% dplyr::mutate(units = replace(units, gas ==
+                                                   "Sulfur", "Mt SO2/yr"))
+  cbwg <- cbwg %>% dplyr::mutate(value = dplyr::case_when(gas ==
+                                                            "NH3" ~ value/1000, gas != "NH3" ~ value))
+  cbwg <- cbwg %>% dplyr::mutate(units = replace(units, gas ==
+                                                   "NH3", "Mt NH3/yr"))
+  cbwg <- cbwg %>% dplyr::mutate(value = dplyr::case_when(gas ==
+                                                            "CO" ~ value/1000, gas != "CO" ~ value))
+  cbwg <- cbwg %>% dplyr::mutate(units = replace(units, gas ==
+                                                   "CO", "Mt CO/yr"))
+  cbwg <- cbwg %>% dplyr::mutate(value = dplyr::case_when(gas ==
+                                                            "NOx" ~ value/1000, gas != "NOx" ~ value))
+  cbwg <- cbwg %>% dplyr::mutate(units = replace(units, gas ==
+                                                   "NOx", "Mt NO2/yr"))
+  cbwg <- cbwg %>% dplyr::mutate(value = dplyr::case_when(gas ==
+                                                            "NMVOC" ~ value/1000, gas != "NMVOC" ~ value))
+  cbwg <- cbwg %>% dplyr::mutate(gas = dplyr::case_when(gas ==
+                                                          "NMVOC" ~ "VOC", gas != "NMVOC" ~ gas))
+  cbwg <- cbwg %>% dplyr::mutate(units = replace(units, gas ==
+                                                   "VOC", "Mt VOC/yr"))
+  cbwg <- cbwg %>% dplyr::mutate(value = dplyr::case_when(gas ==
+                                                            "BC" ~ value/1000, gas != "BC" ~ value))
+  cbwg <- cbwg %>% dplyr::mutate(units = replace(units, gas ==
+                                                   "BC", "Mt BC/yr"))
+  cbwg <- cbwg %>% dplyr::mutate(value = dplyr::case_when(gas ==
+                                                            "OC" ~ value/1000, gas != "OC" ~ value))
+  cbwg <- cbwg %>% dplyr::mutate(units = replace(units, gas ==
+                                                   "OC", "Mt OC/yr"))
+  cbwg <- cbwg %>% dplyr::mutate(value = dplyr::case_when(gas ==
+                                                            "HFC-125" ~ value/1000, gas != "HFC-125" ~ value))
+  cbwg <- cbwg %>% dplyr::mutate(units = replace(units, gas ==
+                                                   "HFC-125", "kt HFC125/yr"))
+  cbwg <- cbwg %>% dplyr::mutate(value = dplyr::case_when(gas ==
+                                                            "HFC-134a" ~ value/1000, gas != "HFC-134a" ~ value))
+  cbwg <- cbwg %>% dplyr::mutate(units = replace(units, gas ==
+                                                   "HFC-134a", "kt HFC134a/yr"))
+  cbwg <- cbwg %>% dplyr::mutate(value = dplyr::case_when(gas ==
+                                                            "HFC-143a" ~ value/1000, gas != "HFC-143a" ~ value))
+  cbwg <- cbwg %>% dplyr::mutate(units = replace(units, gas ==
+                                                   "HFC-143a", "kt HFC143a/yr"))
+  cbwg <- cbwg %>% dplyr::mutate(value = dplyr::case_when(gas ==
+                                                            "HFC-227ea" ~ value/1000, gas != "HFC-227ea" ~ value))
+  cbwg <- cbwg %>% dplyr::mutate(units = replace(units, gas ==
+                                                   "HFC-227ea", "kt HFC227ea/yr"))
+  cbwg <- cbwg %>% dplyr::mutate(value = dplyr::case_when(gas ==
+                                                            "HFC-23" ~ value/1000, gas != "HFC-23" ~ value))
+  cbwg <- cbwg %>% dplyr::mutate(units = replace(units, gas ==
+                                                   "HFC-23", "kt HFC23/yr"))
+  cbwg <- cbwg %>% dplyr::mutate(value = dplyr::case_when(gas ==
+                                                            "HFC-152a" ~ value/1000, gas != "HFC-152a" ~ value))
+  cbwg <- cbwg %>% dplyr::mutate(units = replace(units, gas ==
+                                                   "HFC-152a", "kt HFC152a/yr"))
+  cbwg <- cbwg %>% dplyr::mutate(value = dplyr::case_when(gas ==
+                                                            "HFC-32" ~ value/1000, gas != "HFC-32" ~ value))
+  cbwg <- cbwg %>% dplyr::mutate(units = replace(units, gas ==
+                                                   "HFC-32", "kt HFC32/yr"))
+  cbwg <- cbwg %>% dplyr::mutate(value = dplyr::case_when(gas ==
+                                                            "C2F6" ~ value/1000, gas != "C2F6" ~ value))
+  cbwg <- cbwg %>% dplyr::mutate(units = replace(units, gas ==
+                                                   "C2F6", "kt C2F6/yr"))
+  cbwg <- cbwg %>% dplyr::mutate(value = dplyr::case_when(gas ==
+                                                            "CF4" ~ value/1000, gas != "CF4" ~ value))
+  cbwg <- cbwg %>% dplyr::mutate(units = replace(units, gas ==
+                                                   "CF4", "kt CF4/yr"))
+  cbwg <- cbwg %>% dplyr::mutate(value = dplyr::case_when(gas ==
+                                                            "SF6" ~ value/1000, gas != "SF6" ~ value))
+  cbwg <- cbwg %>% dplyr::mutate(units = replace(units, gas ==
+                                                   "SF6", "kt SF6/yr"))
+  cbwg <- cbwg %>% dplyr::mutate(value = dplyr::case_when(gas ==
+                                                            "NF3" ~ value/1000, gas != "NF3" ~ value))
+  cbwg <- cbwg %>% dplyr::mutate(units = replace(units, gas ==
+                                                   "NF3", "kt NF3/yr"))
+  cbwg <- cbwg %>% dplyr::mutate(value = dplyr::case_when(gas ==
+                                                            "c-C4F8" ~ value/1000, gas != "c-C4F8" ~ value))
+  cbwg <- cbwg %>% dplyr::mutate(units = replace(units, gas ==
+                                                   "c-C4F8", "kt CC4F8/yr"))
+  cbwg <- cbwg %>% dplyr::rename(unit = units)
+  cbwg <- cbwg %>% dplyr::rename(specie = gas)
+  cbwg <- cbwg %>% dplyr::mutate(ffi = tim_scen, lulucf = lulucf_scen, ag=ag_scen) %>%
+    dplyr::select(-scenario)
   return(cbwg)
 }
+
+
+
 
 #' cbwg_to_loo_global_emissions
 #'
 #' Creates a global emissions dataset for specified global and Irish emissions scenarios in FaIR format. Contains 21 climate forcers.
 #'
-#' @param global_scenarios a vector SSP scenarios
-#' @param tim_scenarios vector of Energy system scenarios
-#' @param goblin_scenarios vector AFOLU scenarios
+#' @param global_scenarios0 vector of SSPs
+#' @param tim_scenarios0 vector of Energy system scenarios
+#' @param lulucf_scenarios0 vector LULUCF scenarios
+#' @param ag_scenarios0 vector AG scenarios
 #'
 #' @return emissions
 #' @export
 #'
 #' @examples
-cbwg_to_loo_global_emissions <- function(global_scenarios,tim_scenarios,goblin_scenarios){
-
-  rcmip0 <- rcmip_fair %>% dplyr::rename("global"=value) %>% dplyr::filter(scenario %in% global_scenarios)
+cbwg_to_loo_global_emissions <- function (global_scenarios0=global_scenarios, tim_scenarios0=tim_scenarios, lulucf_scenarios0=lulucf_scenarios, ag_scenarios0=ag_scenarios) {
+  rcmip0 <- rcmip_fair %>% dplyr::rename(global = value) %>% dplyr::filter(scenario %in% global_scenarios0)
   rcmip_loo <- tibble::tibble()
-  for(tim_scen in tim_scenarios)
-    for(goblin_scen in goblin_scenarios){
-      scen_ie <- cbwg_scen_to_fair(emissions_cbwg_2,tim_scen,goblin_scen)
-      scen_ie$scenario <- NULL
-      scen_ie$year <- scen_ie$year + 0.5
-      #combine with rcmip
-      comb <- rcmip0 %>% dplyr::inner_join(scen_ie,by=c("specie","year","unit"))
-      comb <- comb %>% dplyr::rename("ireland"=value)
-      comb <- comb %>% dplyr::mutate(global_loo = global-ireland)
-      rcmip_loo <- dplyr::bind_rows(rcmip_loo,comb)
-      rcmip_loo <- rcmip_loo %>% dplyr::select(scenario,tim,goblin,year,specie, global,ireland,global_loo,unit)
-    }
-  return(rcmip_loo %>% dplyr::select(scenario,tim,goblin,specie,year,global,ireland,global_loo,unit))
+  for (tim_scen in tim_scenarios0) for (ag_scen in ag_scenarios0) for(lulucf_scen in lulucf_scenarios0) {
+    scen_ie <- cbwg_scen_to_fair(emissions_cbwg_3, tim_scen, lulucf_scen,ag_scen)
+    print(paste(tim_scen,lulucf_scen,ag_scen))
+    scen_ie$scenario <- NULL
+    scen_ie$year <- scen_ie$year + 0.5
+    comb <- rcmip0 %>% dplyr::inner_join(scen_ie, by = c("specie",
+                                                         "year", "unit"))
+    comb <- comb %>% dplyr::rename(ireland = value)
+    comb <- comb %>% dplyr::mutate(global_loo = global -
+                                     ireland)
+    rcmip_loo <- dplyr::bind_rows(rcmip_loo, comb)
+    rcmip_loo <- rcmip_loo %>% dplyr::select(scenario,ffi,
+                                             lulucf, ag, specie, year,global, ireland, global_loo,
+                                             unit)
+  }
+  return(rcmip_loo %>% dplyr::select(scenario,ffi, lulucf,ag,
+                                     specie, year, global, ireland, global_loo, unit))
 }
 
 
@@ -502,6 +537,58 @@ gen_fair_loo <- function(rcmip_loo,tim_scen="250mt-led", goblin_scen="Sc3e",endy
   #fmod$run()
   fmod %>% return()
 }
+
+
+#' gen_fair_loo_3
+#'
+#' initialise a FaIR instance with global emissions minus a cbwg ireland emission scenario
+#'
+#' @param rcmip_loo global emissions dataset for global and cbwg scenarios produced by cbwg_to_loo_global_emissions_3
+#' @param ffi_scen a co2 ffi scenario name
+#' @param lulucf_scen lulucf scenario name
+#' @param ag_scen ag scenario name
+#' @param endyear end year of run
+#' @param ch4_meth ch4_method
+#' @param ghg_meth ghg_method
+#' @param keep_species names of drivers to keep, default "All"
+#'
+#' @return FaIR model initialised with global - ireland emissions
+#' @export
+#'
+#' @examples
+gen_fair_loo_3 <- function (rcmip_loo, ffi_scen = "250mt-led", lulucf_scen = "L1", ag_scen="S1",endyear = 2100L, ch4_meth = "thornhill2021", ghg_meth = "leach2021",keep_species = "All") {
+  #
+  fmod <- gen_fair(endyear = endyear, ch4_meth = ch4_meth, ghg_meth = ghg_meth)
+  print("filling emissions")
+  if (!(ffi_scen %in% tim_scenarios))
+    stop("bad ffi (tim) scenario")
+  if (!lulucf_scen %in% lulucf_scenarios)
+    stop("bad lulucf scenario")
+  if (!ag_scen %in% ag_scenarios)
+    stop("bad ag scenario")
+  rcmip_loo_0 <- rcmip_loo %>% dplyr::filter(ffi == ffi_scen, lulucf == lulucf_scen, ag==ag_scen)
+  #zero out selected emissions
+  if(keep_species != "All") rcmip_loo_0 <- rcmip_loo_0 %>% dplyr::mutate(global_loo=ifelse(!(specie %in% keep_species),global,global_loo))
+
+  species0 <- rcmip_loo_0$specie %>% unique()
+  timepoints0 <- rcmip_loo_0$year %>% unique()
+  #constrained or unconstrained ensemble
+  configs <- fair_configs_cmip6 %>% dplyr::mutate(model_run = paste(model, run, sep = "_"))
+  #
+  nconfig <- dim(configs)[1]
+  config_names <- configs$model_run
+  for (scen in global_scenarios) for (spec in species0) for (conf in config_names) {
+    dat <- rcmip_loo_0 %>% dplyr::filter(scenario == scen,
+                                         specie == spec) %>% dplyr::pull(global_loo)
+    interface$fill(fmod$emissions, data = dat, specie = spec,
+                   scenario = scen, config = conf, timepoints = timepoints0)
+  }
+  print(paste(nconfig,"configs good"))
+  fmod %>% return()
+}
+
+
+
 
 #' find_neutral_probabilities
 #'

@@ -1,10 +1,10 @@
 Package: cbwgr
 Type: Package
-Title: Warming impact of CBWG emissions scenarios
-Version: 0.1.6
+Title: Warming impact of Irish emissions scenarios
+Version: 0.2.0
 Author: Joseph Wheatley
 Maintainer: The package maintainer <joe.wheatley@ucd.ie>
-Description: cbwgr used the FaIR Simple Model, historical global and irish emissions datasets and global and Irish emissions scenarios.
+Description: cbwgr uses the FaIR Simple Climate Model, historical global and irish emissions datasets and global and Irish emissions scenarios developed by the Carbon Budgets Working Group
     Marginal warming impact can be calculated.
 License: Apache License (>= 2)
 Encoding: UTF-8
